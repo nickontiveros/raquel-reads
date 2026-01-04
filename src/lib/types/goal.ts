@@ -1,4 +1,4 @@
-export type GoalType = 'daily-reading' | 'books-per-month' | 'books-per-year' | 'reading-streak';
+export type GoalType = 'daily-reading' | 'books-per-month' | 'books-per-year' | 'reading-streak' | 'pages-per-day';
 export type GoalPeriod = 'day' | 'week' | 'month' | 'year';
 
 export interface Goal {
@@ -9,8 +9,8 @@ export interface Goal {
   startDate: Date;
   endDate?: Date;
   active: boolean;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export interface CreateGoalInput {

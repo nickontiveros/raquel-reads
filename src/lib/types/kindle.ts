@@ -17,6 +17,7 @@ export interface KindleBookSnapshot {
   author: string;
   percentComplete?: number;
   lastOpenedAt?: Date;
+  coverUrl?: string;
 }
 
 export interface KindleSnapshot {

@@ -11,3 +11,5 @@ export {
   useActiveDaysCount,
   useCurrentStreak,
 } from './useReadingSessions';
+export { useStats, useMonthlyStats, useLongestStreak } from './useStats';
+export { useGoals, useGoalsWithProgress } from './useGoals';

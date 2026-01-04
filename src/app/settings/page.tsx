@@ -1,49 +1,241 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Cloud, Download, Upload, Trash2, AlertTriangle } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { Cloud, Download, Upload, Trash2, AlertTriangle, CheckCircle, Loader2, HelpCircle, RefreshCw } from 'lucide-react';
+import { kindleService } from '@/lib/services/kindleService';
+import { db } from '@/lib/db';
+import { formatDistanceToNow } from 'date-fns';
 
 export default function SettingsPage() {
+  const [cookies, setCookies] = useState('');
+  const [deviceToken, setDeviceToken] = useState('');
+  const [isConnected, setIsConnected] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [showInstructions, setShowInstructions] = useState(false);
+
+  // Load existing credentials on mount
+  useEffect(() => {
+    const loadCredentials = async () => {
+      const creds = await kindleService.getCredentials();
+      if (creds) {
+        setCookies(creds.cookies);
+        setDeviceToken(creds.deviceToken);
+        setIsConnected(true);
+      }
+      const syncInfo = await kindleService.getLastSyncInfo();
+      setLastSync(syncInfo.lastSync);
+      setSyncStatus(syncInfo.status);
+    };
+    loadCredentials();
+  }, []);
+
+  const handleSaveCredentials = async () => {
+    if (!cookies.trim()) {
+      setError('Amazon cookies are required');
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      await kindleService.saveCredentials({
+        cookies: cookies.trim(),
+        deviceToken: deviceToken.trim(),
+      });
+      setIsConnected(true);
+      setError(null);
+    } catch (err) {
+      setError('Failed to save credentials');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    if (confirm('Disconnect Kindle? Your sync history will be preserved.')) {
+      await kindleService.clearCredentials();
+      setCookies('');
+      setDeviceToken('');
+      setIsConnected(false);
+      setLastSync(null);
+    }
+  };
+
+  const handleSync = async () => {
+    setIsSyncing(true);
+    setError(null);
+
+    try {
+      const result = await kindleService.sync();
+      if (result.success) {
+        setSyncStatus('success');
+        setLastSync(new Date());
+      } else {
+        setError(result.error || 'Sync failed');
+        setSyncStatus('error');
+      }
+    } catch (err) {
+      setError('Sync failed');
+      setSyncStatus('error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleExport = async () => {
+    if (!db) return;
+
+    const data = {
+      exportedAt: new Date().toISOString(),
+      version: '1.0',
+      books: await db.books.toArray(),
+      readingSessions: await db.readingSessions.toArray(),
+      goals: await db.goals.toArray(),
+    };
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `raquel-reads-export-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = async () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file || !db) return;
+
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+
+        if (data.books) {
+          for (const book of data.books) {
+            const existing = await db.books.get(book.id);
+            if (!existing) {
+              await db.books.add(book);
+            }
+          }
+        }
+
+        if (data.readingSessions) {
+          for (const session of data.readingSessions) {
+            const existing = await db.readingSessions.get(session.id);
+            if (!existing) {
+              await db.readingSessions.add(session);
+            }
+          }
+        }
+
+        if (data.goals) {
+          for (const goal of data.goals) {
+            const existing = await db.goals.get(goal.id);
+            if (!existing) {
+              await db.goals.add(goal);
+            }
+          }
+        }
+
+        alert('Data imported successfully!');
+      } catch (err) {
+        alert('Failed to import data. Make sure the file is valid.');
+      }
+    };
+    input.click();
+  };
+
+  const handleClearData = async () => {
+    if (!db) return;
+
+    if (confirm('Are you sure you want to delete ALL your data? This cannot be undone!')) {
+      if (confirm('Really delete everything? Export your data first if you want to keep it.')) {
+        await db.books.clear();
+        await db.readingSessions.clear();
+        await db.goals.clear();
+        await db.syncLogs.clear();
+        await db.kindleSnapshots.clear();
+        window.location.reload();
+      }
+    }
+  };
+
   return (
-    <div className="container max-w-2xl py-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground">
-          Manage your account and preferences
-        </p>
+    <div className="container max-w-2xl py-4 sm:py-6">
+      <div className="mb-4 sm:mb-6">
+        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Settings</h1>
+        <p className="text-sm text-muted-foreground sm:text-base">Manage your account and preferences</p>
       </div>
 
       {/* Kindle Integration */}
-      <Card className="mb-6">
+      <Card className="mb-4 sm:mb-6">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Cloud className="h-5 w-5" />
               <CardTitle className="text-base">Kindle Integration</CardTitle>
             </div>
-            <Badge variant="secondary">Not Connected</Badge>
+            <Badge variant={isConnected ? 'default' : 'secondary'}>
+              {isConnected ? 'Connected' : 'Not Connected'}
+            </Badge>
           </div>
           <CardDescription>
             Sync your Kindle library and reading activity automatically
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Setup info */}
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950">
             <div className="flex gap-3">
-              <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
               <div className="text-sm">
                 <p className="font-medium text-amber-800 dark:text-amber-200">Setup Required</p>
                 <p className="text-amber-700 dark:text-amber-300">
-                  You&apos;ll need to run the tls-client-api server and provide your Amazon cookies to enable Kindle sync.
+                  Run the tls-client-api server first:{' '}
+                  <code className="rounded bg-amber-100 px-1 dark:bg-amber-900">docker-compose up -d</code>
                 </p>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-amber-700 dark:text-amber-300"
+                  onClick={() => setShowInstructions(true)}
+                >
+                  <HelpCircle className="mr-1 h-3 w-3" />
+                  How to get cookies
+                </Button>
               </div>
             </div>
           </div>
 
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+              {error}
+            </div>
+          )}
+
+          {/* Credentials form */}
           <div className="space-y-3">
             <div>
               <label htmlFor="cookies" className="mb-1.5 block text-sm font-medium">
@@ -53,42 +245,93 @@ export default function SettingsPage() {
                 id="cookies"
                 type="password"
                 placeholder="ubid-main=xxx; at-main=xxx; x-main=xxx; session-id=xxx"
+                value={cookies}
+                onChange={(e) => setCookies(e.target.value)}
               />
               <p className="mt-1 text-xs text-muted-foreground">
-                Paste your Amazon cookies (ubid-main, at-main, x-main, session-id)
+                Required cookies: ubid-main, at-main, x-main, session-id
               </p>
             </div>
 
             <div>
               <label htmlFor="deviceToken" className="mb-1.5 block text-sm font-medium">
-                Device Token
+                Device Token (optional)
               </label>
               <Input
                 id="deviceToken"
                 type="password"
                 placeholder="Your Kindle device token"
+                value={deviceToken}
+                onChange={(e) => setDeviceToken(e.target.value)}
               />
             </div>
 
             <div className="flex gap-2">
-              <Button className="flex-1">Save & Test Connection</Button>
+              <Button onClick={handleSaveCredentials} disabled={isSaving} className="flex-1">
+                {isSaving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : isConnected ? (
+                  <>
+                    <CheckCircle className="mr-2 h-4 w-4" />
+                    Update Credentials
+                  </>
+                ) : (
+                  'Save Credentials'
+                )}
+              </Button>
+              {isConnected && (
+                <Button variant="outline" onClick={handleDisconnect}>
+                  Disconnect
+                </Button>
+              )}
             </div>
           </div>
+
+          {/* Sync status */}
+          {isConnected && (
+            <>
+              <Separator />
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Sync Status</p>
+                  <p className="text-xs text-muted-foreground">
+                    {lastSync
+                      ? `Last synced ${formatDistanceToNow(lastSync, { addSuffix: true })}`
+                      : 'Never synced'}
+                  </p>
+                </div>
+                <Button onClick={handleSync} disabled={isSyncing} size="sm">
+                  {isSyncing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Syncing...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Sync Now
+                    </>
+                  )}
+                </Button>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
       {/* Data Management */}
-      <Card className="mb-6">
+      <Card className="mb-4 sm:mb-6">
         <CardHeader>
           <CardTitle className="text-base">Data Management</CardTitle>
-          <CardDescription>
-            Export or import your reading data
-          </CardDescription>
+          <CardDescription>Export or import your reading data</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950">
             <div className="flex gap-3">
-              <AlertTriangle className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <AlertTriangle className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
               <div className="text-sm">
                 <p className="font-medium text-blue-800 dark:text-blue-200">Browser Storage</p>
                 <p className="text-blue-700 dark:text-blue-300">
@@ -99,11 +342,11 @@ export default function SettingsPage() {
           </div>
 
           <div className="flex gap-2">
-            <Button variant="outline" className="flex-1">
+            <Button variant="outline" className="flex-1" onClick={handleExport}>
               <Download className="mr-2 h-4 w-4" />
               Export Data
             </Button>
-            <Button variant="outline" className="flex-1">
+            <Button variant="outline" className="flex-1" onClick={handleImport}>
               <Upload className="mr-2 h-4 w-4" />
               Import Data
             </Button>
@@ -113,7 +356,7 @@ export default function SettingsPage() {
 
           <div>
             <p className="mb-2 text-sm font-medium text-destructive">Danger Zone</p>
-            <Button variant="destructive" size="sm">
+            <Button variant="destructive" size="sm" onClick={handleClearData}>
               <Trash2 className="mr-2 h-4 w-4" />
               Clear All Data
             </Button>
@@ -127,14 +370,100 @@ export default function SettingsPage() {
           <CardTitle className="text-base">About</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Raquel Reads v0.1.0
-          </p>
+          <p className="text-sm text-muted-foreground">Raquel Reads v0.1.0</p>
           <p className="text-sm text-muted-foreground">
             A personal reading tracker with Kindle integration.
           </p>
         </CardContent>
       </Card>
+
+      {/* Instructions Dialog */}
+      <Dialog open={showInstructions} onOpenChange={setShowInstructions}>
+        <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>How to Get Amazon Cookies</DialogTitle>
+            <DialogDescription>
+              Follow these steps to extract your Amazon cookies
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 text-sm">
+            <div>
+              <h4 className="font-medium">1. Start the TLS Client Server</h4>
+              <p className="text-muted-foreground">
+                Open a terminal in the project folder and run:
+              </p>
+              <code className="mt-1 block rounded bg-muted p-2">docker-compose up -d</code>
+              <p className="mt-1 text-xs text-muted-foreground">
+                (or <code>docker compose up -d</code> on newer Docker)
+              </p>
+            </div>
+
+            <div>
+              <h4 className="font-medium">2. Log in to Amazon</h4>
+              <p className="text-muted-foreground">
+                Go to{' '}
+                <a
+                  href="https://read.amazon.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary underline"
+                >
+                  read.amazon.com
+                </a>{' '}
+                and sign in with your Amazon account.
+              </p>
+            </div>
+
+            <div>
+              <h4 className="font-medium">3. Open Developer Tools</h4>
+              <p className="text-muted-foreground">
+                Press <kbd className="rounded border px-1">F12</kbd> or right-click and select
+                &quot;Inspect&quot;
+              </p>
+            </div>
+
+            <div>
+              <h4 className="font-medium">4. Go to Application Tab</h4>
+              <p className="text-muted-foreground">
+                Click on &quot;Application&quot; (or &quot;Storage&quot; in Firefox), then
+                &quot;Cookies&quot; → &quot;https://read.amazon.com&quot;
+              </p>
+            </div>
+
+            <div>
+              <h4 className="font-medium">5. Copy ALL Cookies</h4>
+              <p className="text-muted-foreground">
+                Copy ALL cookie values from read.amazon.com. Right-click in the cookies list
+                and select &quot;Copy all&quot; or manually copy each one in this format:
+              </p>
+              <code className="mt-1 block rounded bg-muted p-2 text-xs">
+                name1=value1; name2=value2; ...
+              </code>
+            </div>
+
+            <div>
+              <h4 className="font-medium">6. Get Device Token (Required)</h4>
+              <p className="text-muted-foreground">
+                Go to the <strong>Network</strong> tab in DevTools, refresh the page, then search for
+                &quot;getDeviceToken&quot;. Click that request and copy the value from the URL:
+              </p>
+              <code className="mt-1 block rounded bg-muted p-2 text-xs break-all">
+                .../getDeviceToken?serialNumber=<strong>XXXXX</strong>&amp;deviceType=XXXXX
+              </code>
+              <p className="mt-1 text-muted-foreground">
+                The serialNumber value is your device token.
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950">
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                <strong>Note:</strong> Cookies expire periodically. If sync stops working,
+                you&apos;ll need to repeat this process.
+              </p>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

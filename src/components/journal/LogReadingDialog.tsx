@@ -15,6 +15,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Plus, BookOpen } from 'lucide-react';
 import { useBooks } from '@/lib/hooks/useBooks';
 import { readingSessionService } from '@/lib/services/readingSessionService';
+import { bookService } from '@/lib/services/bookService';
 import { BookCover } from '@/components/books';
 import { format } from 'date-fns';
 import type { Book } from '@/lib/types';
@@ -29,12 +30,11 @@ interface LogReadingDialogProps {
 export function LogReadingDialog({ date, bookId, onSessionLogged, trigger }: LogReadingDialogProps) {
   const [open, setOpen] = useState(false);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
-  const [pagesRead, setPagesRead] = useState('');
+  const [sessionDate, setSessionDate] = useState<Date>(date || new Date());
+  const [currentPage, setCurrentPage] = useState('');
   const [notes, setNotes] = useState('');
   const [isLogging, setIsLogging] = useState(false);
   const books = useBooks();
-
-  const sessionDate = date || new Date();
 
   // If bookId is provided, pre-select that book
   useEffect(() => {
@@ -46,22 +46,39 @@ export function LogReadingDialog({ date, bookId, onSessionLogged, trigger }: Log
     }
   }, [bookId, books]);
 
+  // Calculate pages read based on current page vs book's previous current page
+  const previousPage = selectedBook?.currentPage || 0;
+  const enteredPage = currentPage ? parseInt(currentPage) : 0;
+  const pagesRead = enteredPage > previousPage ? enteredPage - previousPage : 0;
+
   const handleLog = async () => {
     if (!selectedBook) return;
 
     setIsLogging(true);
     try {
+      const newCurrentPage = currentPage ? parseInt(currentPage) : undefined;
+
       await readingSessionService.create({
         bookId: selectedBook.id,
         date: sessionDate,
-        pagesRead: pagesRead ? parseInt(pagesRead) : undefined,
+        pagesRead: pagesRead > 0 ? pagesRead : undefined,
+        endPage: newCurrentPage,
+        startPage: previousPage || undefined,
         notes: notes || undefined,
         source: 'manual',
       });
 
+      // Update the book's current page
+      if (newCurrentPage) {
+        await bookService.update(selectedBook.id, {
+          currentPage: newCurrentPage,
+          status: selectedBook.status === 'want-to-read' ? 'reading' : selectedBook.status,
+        });
+      }
+
       setOpen(false);
       setSelectedBook(bookId ? selectedBook : null);
-      setPagesRead('');
+      setCurrentPage('');
       setNotes('');
       onSessionLogged?.();
     } catch (error) {
@@ -75,7 +92,8 @@ export function LogReadingDialog({ date, bookId, onSessionLogged, trigger }: Log
     if (!bookId) {
       setSelectedBook(null);
     }
-    setPagesRead('');
+    setSessionDate(date || new Date());
+    setCurrentPage('');
     setNotes('');
   };
 
@@ -96,11 +114,24 @@ export function LogReadingDialog({ date, bookId, onSessionLogged, trigger }: Log
         <DialogHeader>
           <DialogTitle>Log Reading Session</DialogTitle>
           <DialogDescription>
-            {format(sessionDate, 'EEEE, MMMM d, yyyy')}
+            Record your reading activity
           </DialogDescription>
         </DialogHeader>
 
         <div className="mt-4 space-y-4">
+          {/* Date */}
+          <div>
+            <label htmlFor="sessionDate" className="mb-1.5 block text-sm font-medium">
+              Date
+            </label>
+            <Input
+              id="sessionDate"
+              type="date"
+              value={format(sessionDate, 'yyyy-MM-dd')}
+              onChange={(e) => setSessionDate(new Date(e.target.value + 'T12:00:00'))}
+              max={format(new Date(), 'yyyy-MM-dd')}
+            />
+          </div>
           {/* Book Selection */}
           {!selectedBook ? (
             <div>
@@ -162,19 +193,34 @@ export function LogReadingDialog({ date, bookId, onSessionLogged, trigger }: Log
             </div>
           )}
 
-          {/* Pages Read */}
-          <div>
-            <label htmlFor="pagesRead" className="mb-1.5 block text-sm font-medium">
-              Pages read (optional)
-            </label>
-            <Input
-              id="pagesRead"
-              type="number"
-              placeholder="e.g., 25"
-              value={pagesRead}
-              onChange={(e) => setPagesRead(e.target.value)}
-            />
-          </div>
+          {/* Current Page */}
+          {selectedBook && (
+            <div>
+              <label htmlFor="currentPage" className="mb-1.5 block text-sm font-medium">
+                Current page <span className="text-muted-foreground font-normal">(optional)</span>
+              </label>
+              <Input
+                id="currentPage"
+                type="number"
+                placeholder={previousPage > 0 ? `Currently on page ${previousPage}` : 'e.g., 50'}
+                value={currentPage}
+                onChange={(e) => setCurrentPage(e.target.value)}
+                min={1}
+                max={selectedBook.totalPages || undefined}
+              />
+              {selectedBook.totalPages && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {previousPage > 0 ? `Was on page ${previousPage}` : 'Start tracking'} of {selectedBook.totalPages}
+                  {pagesRead > 0 && ` (+${pagesRead} pages today)`}
+                </p>
+              )}
+              {!selectedBook.totalPages && pagesRead > 0 && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  +{pagesRead} pages today
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Notes */}
           <div>

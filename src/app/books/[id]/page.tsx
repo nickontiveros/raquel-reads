@@ -19,7 +19,7 @@ import { ArrowLeft, MoreVertical, Play, Pause, CheckCircle, Trash2, BookOpen, Pl
 import { useBook } from '@/lib/hooks/useBooks';
 import { useReadingSessionsByBookId } from '@/lib/hooks/useReadingSessions';
 import { bookService } from '@/lib/services/bookService';
-import { BookCover } from '@/components/books';
+import { BookCover, MarkCompleteDialog } from '@/components/books';
 import { LogReadingDialog, SessionCard } from '@/components/journal';
 import type { BookStatus } from '@/lib/types';
 
@@ -76,9 +76,9 @@ export default function BookDetailPage({ params }: { params: Promise<{ id: strin
   const hasSessions = sessions && sessions.length > 0;
 
   return (
-    <div className="container py-6">
+    <div className="container py-4 sm:py-6">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between sm:mb-6">
         <Button variant="ghost" size="sm" asChild>
           <Link href="/books">
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -100,10 +100,16 @@ export default function BookDetailPage({ params }: { params: Promise<{ id: strin
               <Pause className="mr-2 h-4 w-4" />
               Pause
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleStatusChange('completed')}>
-              <CheckCircle className="mr-2 h-4 w-4" />
-              Mark Complete
-            </DropdownMenuItem>
+            <MarkCompleteDialog
+              bookId={book.id}
+              bookTitle={book.title}
+              trigger={
+                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  Mark Complete
+                </DropdownMenuItem>
+              }
+            />
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleDelete} className="text-destructive">
               <Trash2 className="mr-2 h-4 w-4" />
@@ -114,17 +120,17 @@ export default function BookDetailPage({ params }: { params: Promise<{ id: strin
       </div>
 
       {/* Book Info */}
-      <div className="grid gap-6 md:grid-cols-[200px_1fr]">
+      <div className="grid gap-4 sm:gap-6 md:grid-cols-[200px_1fr]">
         <div className="flex justify-center md:justify-start">
           <BookCover src={book.coverUrl} alt={book.title} size="lg" />
         </div>
 
         <div>
-          <Badge variant={statusVariants[book.status]} className="mb-3">
+          <Badge variant={statusVariants[book.status]} className="mb-2 sm:mb-3">
             {statusLabels[book.status]}
           </Badge>
-          <h1 className="mb-2 text-2xl font-bold">{book.title}</h1>
-          <p className="mb-4 text-lg text-muted-foreground">{book.author}</p>
+          <h1 className="mb-1 text-xl font-bold sm:mb-2 sm:text-2xl">{book.title}</h1>
+          <p className="mb-3 text-base text-muted-foreground sm:mb-4 sm:text-lg">{book.author}</p>
 
           {book.totalPages && (
             <p className="mb-4 text-sm text-muted-foreground">
@@ -167,10 +173,16 @@ export default function BookDetailPage({ params }: { params: Promise<{ id: strin
                     </Button>
                   }
                 />
-                <Button variant="outline" onClick={() => handleStatusChange('completed')}>
-                  <CheckCircle className="mr-2 h-4 w-4" />
-                  Mark Complete
-                </Button>
+                <MarkCompleteDialog
+                  bookId={book.id}
+                  bookTitle={book.title}
+                  trigger={
+                    <Button variant="outline">
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      Mark Complete
+                    </Button>
+                  }
+                />
               </>
             )}
             {book.status === 'paused' && (
@@ -194,10 +206,10 @@ export default function BookDetailPage({ params }: { params: Promise<{ id: strin
         </div>
       </div>
 
-      <Separator className="my-6" />
+      <Separator className="my-4 sm:my-6" />
 
       {/* Reading Sessions */}
-      <Card className="mb-6">
+      <Card className="mb-4 sm:mb-6">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>

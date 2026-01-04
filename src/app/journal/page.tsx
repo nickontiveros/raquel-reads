@@ -19,11 +19,11 @@ export default function JournalPage() {
   const hasSessions = sessions && sessions.length > 0;
 
   return (
-    <div className="container py-6">
-      <div className="mb-6 flex items-center justify-between">
+    <div className="container py-4 sm:py-6">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Reading Journal</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Reading Journal</h1>
+          <p className="text-sm text-muted-foreground sm:text-base">
             Track your daily reading activity
           </p>
         </div>

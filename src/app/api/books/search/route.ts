@@ -17,11 +17,13 @@ export async function POST(request: NextRequest) {
     const apiKey = process.env.GOOGLE_BOOKS_API_KEY;
 
     // Build URL with or without API key
+    // Request more results than needed to allow for filtering
     const params = new URLSearchParams({
       q: query,
-      maxResults: String(maxResults),
+      maxResults: String(Math.min(maxResults * 2, 40)), // Request extra for filtering
       printType: 'books',
       orderBy: 'relevance',
+      langRestrict: 'en', // Prioritize English results
     });
 
     if (apiKey) {
@@ -46,7 +48,7 @@ export async function POST(request: NextRequest) {
 
     const data = await response.json();
 
-    // Transform the response
+    // Transform the response to match GoogleBookResult type
     const books = (data.items || []).map((item: {
       id: string;
       volumeInfo: {
@@ -66,7 +68,15 @@ export async function POST(request: NextRequest) {
       };
     }) => {
       const { volumeInfo, id } = item;
-      const thumbnail = volumeInfo.imageLinks?.thumbnail || volumeInfo.imageLinks?.smallThumbnail;
+
+      // Transform imageLinks URLs to HTTPS
+      let imageLinks = volumeInfo.imageLinks;
+      if (imageLinks) {
+        imageLinks = {
+          thumbnail: imageLinks.thumbnail?.replace('http://', 'https://'),
+          smallThumbnail: imageLinks.smallThumbnail?.replace('http://', 'https://'),
+        };
+      }
 
       return {
         id,
@@ -75,14 +85,35 @@ export async function POST(request: NextRequest) {
         description: volumeInfo.description,
         pageCount: volumeInfo.pageCount,
         publishedDate: volumeInfo.publishedDate,
-        coverUrl: thumbnail?.replace('http://', 'https://').replace('&edge=curl', ''),
-        isbn: volumeInfo.industryIdentifiers?.find(
-          (id: { type: string }) => id.type === 'ISBN_13' || id.type === 'ISBN_10'
-        )?.identifier,
+        imageLinks,
+        industryIdentifiers: volumeInfo.industryIdentifiers,
       };
     });
 
-    return NextResponse.json({ books, totalItems: data.totalItems || 0 });
+    // Filter and deduplicate results
+    const seen = new Set<string>();
+    const filteredBooks = books
+      .filter((book: { title: string; authors: string[]; pageCount?: number; imageLinks?: { thumbnail?: string } }) => {
+        // Skip books without proper titles
+        if (!book.title || book.title === 'Unknown Title') return false;
+
+        // Create a key for deduplication (lowercase title + first author)
+        const key = `${book.title.toLowerCase()}|${book.authors[0]?.toLowerCase() || ''}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+
+        return true;
+      })
+      // Sort by quality indicators (has cover, has page count, has ISBN)
+      .sort((a: { imageLinks?: { thumbnail?: string }; pageCount?: number; industryIdentifiers?: unknown[] },
+             b: { imageLinks?: { thumbnail?: string }; pageCount?: number; industryIdentifiers?: unknown[] }) => {
+        const scoreA = (a.imageLinks?.thumbnail ? 2 : 0) + (a.pageCount ? 1 : 0) + (a.industryIdentifiers?.length ? 1 : 0);
+        const scoreB = (b.imageLinks?.thumbnail ? 2 : 0) + (b.pageCount ? 1 : 0) + (b.industryIdentifiers?.length ? 1 : 0);
+        return scoreB - scoreA;
+      })
+      .slice(0, maxResults);
+
+    return NextResponse.json({ books: filteredBooks, totalItems: data.totalItems || 0 });
   } catch (error) {
     console.error('Search error:', error);
     return NextResponse.json(

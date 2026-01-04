@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BookOpen, Plus, Search, RefreshCw } from 'lucide-react';
 import { useBooks } from '@/lib/hooks/useBooks';
-import { BookCard, AddBookDialog } from '@/components/books';
+import { BookCard, BookCardSkeleton, AddBookDialog } from '@/components/books';
 import type { BookStatus } from '@/lib/types';
 
 type FilterValue = 'all' | BookStatus;
@@ -40,15 +40,16 @@ export default function BooksPage() {
     return result;
   }, [books, filter, searchQuery]);
 
-  const isEmpty = !books || books.length === 0;
+  const isLoading = books === undefined;
+  const isEmpty = books !== undefined && books.length === 0;
   const noResults = books && books.length > 0 && filteredBooks.length === 0;
 
   return (
-    <div className="container py-6">
-      <div className="mb-6 flex items-center justify-between">
+    <div className="container py-4 sm:py-6">
+      <div className="mb-4 flex items-center justify-between sm:mb-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Books</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Books</h1>
+          <p className="text-sm text-muted-foreground sm:text-base">
             {books ? `${books.length} book${books.length !== 1 ? 's' : ''} in library` : 'Loading...'}
           </p>
         </div>
@@ -56,7 +57,7 @@ export default function BooksPage() {
       </div>
 
       {/* Search and Filters */}
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center">
+      <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -76,8 +77,17 @@ export default function BooksPage() {
         </Tabs>
       </div>
 
+      {/* Loading State */}
+      {isLoading && (
+        <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[...Array(6)].map((_, i) => (
+            <BookCardSkeleton key={i} />
+          ))}
+        </div>
+      )}
+
       {/* Empty State */}
-      {isEmpty && (
+      {!isLoading && isEmpty && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <BookOpen className="mb-4 h-16 w-16 text-muted-foreground/50" />
@@ -104,7 +114,7 @@ export default function BooksPage() {
       )}
 
       {/* No Results State */}
-      {noResults && (
+      {!isLoading && noResults && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <Search className="mb-4 h-16 w-16 text-muted-foreground/50" />
@@ -117,8 +127,8 @@ export default function BooksPage() {
       )}
 
       {/* Book Grid */}
-      {filteredBooks.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {!isLoading && filteredBooks.length > 0 && (
+        <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filteredBooks.map((book) => (
             <BookCard key={book.id} book={book} />
           ))}

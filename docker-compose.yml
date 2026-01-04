@@ -1,0 +1,18 @@
+# Docker Compose for tls-client-api server
+# Required for Kindle API integration (bypasses TLS fingerprinting)
+#
+# Usage:
+#   sudo docker-compose up -d
+#
+# The server will be available at http://localhost:8080
+# See: https://github.com/bogdanfinn/tls-client-api
+
+services:
+  tls-client-api:
+    image: lfsaga/tls-client-api:0.0.1
+    container_name: tls-client-api
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    environment:
+      - AUTH_KEYS=raquel-reads-key
