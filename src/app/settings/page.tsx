@@ -14,7 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Cloud, Download, Upload, Trash2, AlertTriangle, CheckCircle, Loader2, HelpCircle, RefreshCw } from 'lucide-react';
+import { Cloud, Download, Upload, Trash2, AlertTriangle, CheckCircle, Loader2, HelpCircle, RefreshCw, Server } from 'lucide-react';
 import { kindleService } from '@/lib/services/kindleService';
 import { db } from '@/lib/db';
 import { formatDistanceToNow } from 'date-fns';
@@ -22,6 +22,7 @@ import { formatDistanceToNow } from 'date-fns';
 export default function SettingsPage() {
   const [cookies, setCookies] = useState('');
   const [deviceToken, setDeviceToken] = useState('');
+  const [tlsApiUrl, setTlsApiUrl] = useState('');
   const [isConnected, setIsConnected] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -29,6 +30,7 @@ export default function SettingsPage() {
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showInstructions, setShowInstructions] = useState(false);
+  const [showDeployInstructions, setShowDeployInstructions] = useState(false);
 
   // Load existing credentials on mount
   useEffect(() => {
@@ -38,6 +40,10 @@ export default function SettingsPage() {
         setCookies(creds.cookies);
         setDeviceToken(creds.deviceToken);
         setIsConnected(true);
+      }
+      const apiUrl = await kindleService.getTlsClientApiUrl();
+      if (apiUrl) {
+        setTlsApiUrl(apiUrl);
       }
       const syncInfo = await kindleService.getLastSyncInfo();
       setLastSync(syncInfo.lastSync);
@@ -60,6 +66,8 @@ export default function SettingsPage() {
         cookies: cookies.trim(),
         deviceToken: deviceToken.trim(),
       });
+      // Also save TLS API URL if provided
+      await kindleService.saveTlsClientApiUrl(tlsApiUrl.trim());
       setIsConnected(true);
       setError(null);
     } catch (err) {
@@ -266,6 +274,35 @@ export default function SettingsPage() {
               />
             </div>
 
+            <Separator />
+
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <label htmlFor="tlsApiUrl" className="text-sm font-medium">
+                  TLS Client API URL (for mobile)
+                </label>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-xs"
+                  onClick={() => setShowDeployInstructions(true)}
+                >
+                  <Server className="mr-1 h-3 w-3" />
+                  Deploy your own
+                </Button>
+              </div>
+              <Input
+                id="tlsApiUrl"
+                type="url"
+                placeholder="https://your-tls-api.railway.app (leave blank for localhost)"
+                value={tlsApiUrl}
+                onChange={(e) => setTlsApiUrl(e.target.value)}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Required for mobile access. Deploy tls-client-api to a cloud service.
+              </p>
+            </div>
+
             <div className="flex gap-2">
               <Button onClick={handleSaveCredentials} disabled={isSaving} className="flex-1">
                 {isSaving ? (
@@ -459,6 +496,69 @@ export default function SettingsPage() {
               <p className="text-xs text-amber-700 dark:text-amber-300">
                 <strong>Note:</strong> Cookies expire periodically. If sync stops working,
                 you&apos;ll need to repeat this process.
+              </p>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Deploy Instructions Dialog */}
+      <Dialog open={showDeployInstructions} onOpenChange={setShowDeployInstructions}>
+        <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Deploy TLS Client API</DialogTitle>
+            <DialogDescription>
+              Host the API server for mobile access
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 text-sm">
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950">
+              <p className="text-blue-700 dark:text-blue-300">
+                <strong>Why is this needed?</strong> The TLS Client API bypasses Amazon&apos;s
+                TLS fingerprinting. For mobile access, you need to host it in the cloud.
+              </p>
+            </div>
+
+            <div>
+              <h4 className="font-medium">Option 1: Fly.io (Recommended - Free Tier)</h4>
+              <p className="text-muted-foreground mb-2">
+                Fly.io offers a generous free tier with 3 shared VMs.
+              </p>
+              <ol className="list-decimal ml-4 space-y-1 text-muted-foreground">
+                <li>Install Fly CLI: <code className="rounded bg-muted px-1">curl -L https://fly.io/install.sh | sh</code></li>
+                <li>Login: <code className="rounded bg-muted px-1">fly auth login</code></li>
+                <li>Create a new app in the project folder</li>
+                <li>Deploy with: <code className="rounded bg-muted px-1">fly deploy --image lfsaga/tls-client-api:0.0.1</code></li>
+                <li>Set the auth key: <code className="rounded bg-muted px-1">fly secrets set AUTH_KEYS=raquel-reads-key</code></li>
+              </ol>
+            </div>
+
+            <div>
+              <h4 className="font-medium">Option 2: Railway (~$5/month)</h4>
+              <p className="text-muted-foreground mb-2">
+                Simple deployment with usage-based pricing.
+              </p>
+              <ol className="list-decimal ml-4 space-y-1 text-muted-foreground">
+                <li>Go to <a href="https://railway.app" target="_blank" rel="noopener noreferrer" className="text-primary underline">railway.app</a></li>
+                <li>Create new project → Deploy Docker Image</li>
+                <li>Enter: <code className="rounded bg-muted px-1">lfsaga/tls-client-api:0.0.1</code></li>
+                <li>Add variable: <code className="rounded bg-muted px-1">AUTH_KEYS=raquel-reads-key</code></li>
+                <li>Generate domain and copy the URL</li>
+              </ol>
+            </div>
+
+            <div>
+              <h4 className="font-medium">After Deployment</h4>
+              <p className="text-muted-foreground">
+                Copy your deployed URL (e.g., <code className="rounded bg-muted px-1">https://your-app.fly.dev</code>)
+                and paste it in the &quot;TLS Client API URL&quot; field above.
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950">
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                <strong>Security:</strong> Your Amazon cookies are sent to this API server.
+                Only use a server you control and trust.
               </p>
             </div>
           </div>

@@ -7,6 +7,7 @@ export interface UserSettings {
   userId?: string;
   kindleCookies?: string;
   kindleDeviceToken?: string;
+  tlsClientApiUrl?: string; // URL for hosted tls-client-api server
   lastKindleSync?: Date;
   theme?: Theme;
   defaultView?: DefaultView;
@@ -18,6 +19,7 @@ export interface UserSettings {
 export interface UpdateSettingsInput {
   kindleCookies?: string;
   kindleDeviceToken?: string;
+  tlsClientApiUrl?: string;
   lastKindleSync?: Date;
   theme?: Theme;
   defaultView?: DefaultView;

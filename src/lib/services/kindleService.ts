@@ -36,6 +36,34 @@ export const kindleService = {
   },
 
   /**
+   * Get TLS Client API URL (custom or default)
+   */
+  async getTlsClientApiUrl(): Promise<string | undefined> {
+    if (!db) return undefined;
+
+    const settings = await db.userSettings.get('1');
+    return settings?.tlsClientApiUrl;
+  },
+
+  /**
+   * Save TLS Client API URL
+   */
+  async saveTlsClientApiUrl(url: string): Promise<void> {
+    if (!db) return;
+
+    const existing = await db.userSettings.get('1');
+    if (existing) {
+      await db.userSettings.update('1', { tlsClientApiUrl: url || undefined });
+    } else {
+      await db.userSettings.add({
+        id: '1',
+        visitorId: crypto.randomUUID(),
+        tlsClientApiUrl: url || undefined,
+      });
+    }
+  },
+
+  /**
    * Get stored Kindle credentials
    */
   async getCredentials(): Promise<KindleCredentials | null> {
@@ -116,6 +144,9 @@ export const kindleService = {
     }
 
     try {
+      // Get custom TLS client API URL if configured
+      const tlsClientApiUrl = await this.getTlsClientApiUrl();
+
       // Call our API route to fetch Kindle library
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -123,7 +154,10 @@ export const kindleService = {
       const response = await fetch('/api/kindle/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credentials),
+        body: JSON.stringify({
+          ...credentials,
+          tlsClientApiUrl,
+        }),
         signal: controller.signal,
       });
 

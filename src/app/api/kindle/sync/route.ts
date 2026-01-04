@@ -25,7 +25,7 @@ interface KindleBookData {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { cookies, deviceToken } = body;
+    const { cookies, deviceToken, tlsClientApiUrl } = body;
 
     if (!cookies) {
       return NextResponse.json(
@@ -41,6 +41,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Use custom TLS client API URL if provided, otherwise fall back to env or default
+    const apiUrl = tlsClientApiUrl || TLS_CLIENT_API_URL;
+
     // Format cookies for the request
     const cookieString = typeof cookies === 'string'
       ? cookies
@@ -55,7 +58,7 @@ export async function POST(request: NextRequest) {
         cookies: cookieString,
         deviceToken: deviceToken,
         tlsServer: {
-          url: TLS_CLIENT_API_URL,
+          url: apiUrl,
           apiKey: TLS_CLIENT_API_KEY,
         },
       });
