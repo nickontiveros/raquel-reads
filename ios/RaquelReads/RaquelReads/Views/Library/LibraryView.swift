@@ -6,6 +6,7 @@ struct LibraryView: View {
     @Query(sort: \Book.updatedAt, order: .reverse) private var books: [Book]
     @State private var selectedFilter: BookStatus?
     @State private var searchText: String = ""
+    @State private var showAddBook = false
 
     private var filteredBooks: [Book] {
         var result = books
@@ -45,10 +46,17 @@ struct LibraryView: View {
                         Label("No Books Yet", systemImage: "books.vertical")
                     } description: {
                         Text("Add your first book to start tracking your reading.")
+                    } actions: {
+                        Button("Add a Book") {
+                            showAddBook = true
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
                 } else {
                     List(filteredBooks) { book in
-                        BookRow(book: book)
+                        NavigationLink(destination: BookDetailView(book: book)) {
+                            BookRow(book: book)
+                        }
                     }
                     .listStyle(.plain)
                 }
@@ -58,11 +66,14 @@ struct LibraryView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
-                        // TODO: Open add book flow
+                        showAddBook = true
                     } label: {
                         Image(systemName: "plus")
                     }
                 }
+            }
+            .sheet(isPresented: $showAddBook) {
+                AddBookView()
             }
         }
     }
@@ -97,15 +108,7 @@ struct BookRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // Cover image placeholder
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color.secondary.opacity(0.15))
-                .frame(width: 44, height: 64)
-                .overlay {
-                    Image(systemName: "book.closed.fill")
-                        .foregroundStyle(.secondary)
-                        .font(.title3)
-                }
+            BookCoverView(coverUrl: book.coverUrl, width: 44, height: 64)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(book.title)

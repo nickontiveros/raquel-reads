@@ -30,6 +30,8 @@ struct CheckInHomeView: View {
 
 private struct CheckInContent: View {
     @Bindable var viewModel: CheckInViewModel
+    @State private var showLogReading = false
+    @State private var showAddBook = false
 
     var body: some View {
         ZStack {
@@ -71,7 +73,10 @@ private struct CheckInContent: View {
 
                         // Optional detail cards (below the fold)
                         if viewModel.hasCheckedInToday {
-                            OptionalDetailsSection()
+                            OptionalDetailsSection(
+                                onWhatIRead: { showAddBook = true },
+                                onHowFar: { showLogReading = true }
+                            )
                         }
                     }
                 }
@@ -85,12 +90,21 @@ private struct CheckInContent: View {
                 showMilestone: Bindable(viewModel.celebrationService).showMilestone
             )
         }
+        .sheet(isPresented: $showLogReading) {
+            LogReadingSheet()
+        }
+        .sheet(isPresented: $showAddBook) {
+            AddBookView()
+        }
     }
 }
 
 // MARK: - Optional Details
 
 private struct OptionalDetailsSection: View {
+    let onWhatIRead: () -> Void
+    let onHowFar: () -> Void
+
     var body: some View {
         VStack(spacing: 12) {
             Divider()
@@ -104,13 +118,15 @@ private struct OptionalDetailsSection: View {
                 DetailCard(
                     icon: "book.fill",
                     title: "What I read",
-                    subtitle: "Attach a book"
+                    subtitle: "Attach a book",
+                    action: onWhatIRead
                 )
 
                 DetailCard(
                     icon: "chart.line.uptrend.xyaxis",
                     title: "How far I got",
-                    subtitle: "Log pages"
+                    subtitle: "Log pages",
+                    action: onHowFar
                 )
             }
             .padding(.horizontal, 24)
@@ -124,11 +140,10 @@ private struct DetailCard: View {
     let icon: String
     let title: String
     let subtitle: String
+    let action: () -> Void
 
     var body: some View {
-        Button {
-            // TODO: Open detail entry flow
-        } label: {
+        Button(action: action) {
             VStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.title3)

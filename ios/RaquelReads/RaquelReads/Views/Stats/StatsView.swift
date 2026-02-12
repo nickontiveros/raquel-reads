@@ -8,6 +8,7 @@ struct StatsView: View {
     @Query(filter: #Predicate<Goal> { $0.active == true }) private var activeGoals: [Goal]
 
     @State private var streakService: StreakService?
+    @State private var showAddGoal = false
 
     var body: some View {
         NavigationStack {
@@ -49,12 +50,28 @@ struct StatsView: View {
                     .padding(.horizontal)
 
                     // Active goals
-                    if !activeGoals.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
                             Text("Active Goals")
                                 .font(.headline)
-                                .padding(.horizontal)
+                            Spacer()
+                            Button {
+                                showAddGoal = true
+                            } label: {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.title3)
+                            }
+                        }
+                        .padding(.horizontal)
 
+                        if activeGoals.isEmpty {
+                            Text("No goals yet. Tap + to set your first reading goal.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, 16)
+                                .padding(.horizontal)
+                        } else {
                             ForEach(activeGoals) { goal in
                                 GoalRow(goal: goal)
                                     .padding(.horizontal)
@@ -91,6 +108,9 @@ struct StatsView: View {
                 if streakService == nil {
                     streakService = StreakService(modelContext: modelContext)
                 }
+            }
+            .sheet(isPresented: $showAddGoal) {
+                AddGoalSheet()
             }
         }
     }
